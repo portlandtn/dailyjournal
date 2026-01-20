@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dailyjournal"
+version = "0.1.0"
+description = "AM/PM journaling CLI with accountability"
+requires-python = ">=3.10"
+
+[project.scripts]
+dailyjournal = "app:main"
+
+[tool.setuptools]
+py-modules = ["app", "coach", "store", "prompts"]
+

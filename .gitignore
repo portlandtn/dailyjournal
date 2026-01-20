@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# SQLite DB
+coachscribe.db
+
+# macOS
+.DS_Store
+
