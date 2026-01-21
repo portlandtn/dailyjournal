@@ -128,3 +128,43 @@ def wipe_sync_dir_entries() -> int:
 
     return deleted
 
+def iter_entry_files() -> list[Path]:
+    """
+    Returns all *.json files in the sync dir (entries + notes), sorted.
+    """
+    sync_dir = _safe_sync_dir()
+    if sync_dir is None:
+        return []
+    return sorted([p for p in sync_dir.glob("*.json") if p.is_file()])
+
+
+def read_entry_file(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def export_note(session_date: str, target_session_type: str, note_text: str) -> Optional[Path]:
+    """
+    Writes an append-note JSON file to DAILYJOURNAL_SYNC_DIR.
+    Notes are separate files (append-only) so they sync across machines.
+    """
+    sync_dir = _safe_sync_dir()
+    if sync_dir is None:
+        return None
+
+    entry_id = uuid4().hex[:12]
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    file_path = sync_dir / f"{session_date}_note_{ts}_{entry_id}.json"
+
+    payload = {
+        "entry_kind": "note",
+        "id": entry_id,
+        "created_at": _utc_now_iso(),
+        "session_date": session_date,              # which day it applies to
+        "target_session_type": target_session_type, # "am" (for now)
+        "note_text": note_text,
+    }
+
+    tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(file_path)
+    return file_path
+

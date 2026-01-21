@@ -2,19 +2,32 @@
 import os
 import sys
 from datetime import date
-from entries import export_entry, wipe_sync_dir_entries, read_entry_file, iter_entry_files
-from store import get_latest_pm_with_tomorrow_focus
-from store import delete_db_file
+from entries import (
+    export_entry, 
+    wipe_sync_dir_entries,
+    read_entry_file,
+    iter_entry_files,
+    export_note,
+)
 
 from store import (
     init_db,
     insert_session,
     get_latest_am,
+    get_latest_am_full,
     get_last_n_summaries,
+    get_latest_pm_with_tomorrow_focus,
+    delete_db_file,
+    # sync tracking for iCloud imports
     is_file_imported,
     mark_file_imported,
     insert_session_from_icloud,
+    import_note_from_icloud,
+    # notes
+    get_notes,
+    add_note,
 )
+
 from prompts import AM_QUESTIONS, PM_QUESTIONS
 from coach import run_am, run_pm
 
@@ -66,9 +79,6 @@ def pm_session():
     today = date.today().isoformat()
     am = get_latest_am(today)
 
-    if not am:
-        am = get_latest_am(today)
-
     if am:
         print("\nAM COMMITMENTS")
         print(f"- Work One Thing: {am['work_one_thing']}")
@@ -96,7 +106,12 @@ def pm_session():
 
     answers = ask_questions(pm_questions)
 
-    data = run_pm(DEFAULT_MODEL, am or {}, answers)
+    append_notes = get_notes(today, "am")
+    am_for_llm = dict(am or {})
+    if append_notes:
+        am_for_llm["append_notes"] = append_notes
+
+    data = run_pm(DEFAULT_MODEL, am_for_llm, answers)
 
     payload = {
         "session_date": today,
@@ -144,7 +159,12 @@ def sync_from_icloud_on_startup() -> None:
 
         try:
             entry = read_entry_file(path)
-            insert_session_from_icloud(entry)
+
+            if entry.get("entry_kind") == "note":
+                import_note_from_icloud(entry)
+            else:
+                insert_session_from_icloud(entry)
+
             mark_file_imported(name)
             imported += 1
         except Exception as e:
@@ -154,6 +174,70 @@ def sync_from_icloud_on_startup() -> None:
     if imported:
         print(f"(sync) Imported {imported} new iCloud entr{'y' if imported == 1 else 'ies'}.")
 
+def _extract_am_derail_risk(raw_transcript: str) -> str | None:
+    # raw_transcript lines look like: "AM Q3: <text>"
+    for line in (raw_transcript or "").splitlines():
+        if line.startswith("AM Q3:"):
+            return line.replace("AM Q3:", "", 1).strip()
+    return None
+
+def append_note(note_text_arg: str | None = None) -> None:
+    today = date.today().isoformat()
+
+    am_full = get_latest_am_full(today)
+
+    print("\nYou mentioned you would like to:")
+    if am_full:
+        if am_full.get("family_one_thing"):
+            print(f"- {am_full['family_one_thing']}")
+        if am_full.get("work_one_thing"):
+            print(f"- {am_full['work_one_thing']}")
+        if am_full.get("focus_guardrail"):
+            print(f"- {am_full['focus_guardrail']}")
+        if am_full.get("if_then_plan"):
+            print(f"- {am_full['if_then_plan']}")
+
+        risk = _extract_am_derail_risk(am_full.get("raw_transcript", ""))
+        if risk:
+            print(f"- Derail risk: {risk}")
+    else:
+        print("- (No AM entry found for today yet.)")
+        print("- (Run: dailyjournal am)")
+
+    existing_notes = get_notes(today, "am")
+    if existing_notes:
+        print("\nExisting notes so far today:")
+        for n in existing_notes:
+            first = n.splitlines()[0]
+            print(f"- {first}")
+
+    # --- one-liner mode ---
+    if note_text_arg and note_text_arg.strip():
+        note_text = note_text_arg.strip()
+    else:
+        print("\nAdd a note about what's happening right now.")
+        print("End with a single line containing only: .done\n")
+
+        lines = []
+        while True:
+            line = input()
+            if line.strip() == ".done":
+                break
+            lines.append(line)
+
+        note_text = "\n".join(lines).strip()
+
+    if not note_text:
+        print("No note entered.")
+        return
+
+    add_note(today, "am", note_text)
+
+    exported = export_note(today, "am", note_text)
+    if exported:
+        print(f"\n(iCloud) wrote note file: {exported.name}")
+
+    print("\n--- NOTE APPENDED ---")
 
 def main():
     if not os.getenv("OPENAI_API_KEY"):
@@ -175,11 +259,13 @@ Usage:
   dailyjournal free_entry       Enter free text, not used with a template
   dailyjournal free             Enter free text, not used with a template
   dailyjournal free_text        Enter free text, not used with a template
-  dailyjournal wipe [--iCloud]  Erases the local journal, (also wipes the icloud sync if icloud argument is passed)
+  dailyjournal wipe [--icloud]  Erases the local journal, (also wipes the icloud sync if icloud argument is passed)
+  dailyjournal append [text]    Append a note to today's AM (one-liner or multiline)
 
 Examples:
   dailyjournal am
   dailyjournal pm
+  dailyjournal append "Got 3178 done; follow up tomorrow"
 """)
         sys.exit(0)
 
@@ -195,7 +281,11 @@ Examples:
         free_entry()
     elif cmd == "wipe":
         wipe(also_wipe_icloud=("--icloud" in sys.argv))
-    else:
+    elif cmd == "append":
+        # One-liner mode: dailyjournal append "text..."
+        note_text_arg = " ".join(sys.argv[2:]).strip() if len(sys.argv) > 2 else None
+        append_note(note_text_arg)
+    else: 
         print("Unknown command. Run `dailyjournal help`.")
         sys.exit(2)
 

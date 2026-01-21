@@ -48,6 +48,22 @@ def init_db() -> None:
         )
 
         con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_date TEXT NOT NULL,         -- YYYY-MM-DD
+                target_session_type TEXT NOT NULL,  -- "am"
+                note_text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notes_date_type ON notes(session_date, target_session_type)"
+        )
+
+
+        con.execute(
             "CREATE INDEX IF NOT EXISTS idx_sessions_date_type ON sessions(session_date, session_type)"
         )
 
@@ -212,4 +228,94 @@ def insert_session_from_icloud(entry: Dict[str, Any]) -> None:
                 entry.get("created_at") or datetime.utcnow().isoformat(timespec="seconds"),
             ),
         )
+
+def add_note(session_date: str, target_session_type: str, note_text: str, created_at: Optional[str] = None) -> None:
+    with _conn() as con:
+        con.execute(
+            """
+            INSERT INTO notes (session_date, target_session_type, note_text, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                session_date,
+                target_session_type,
+                note_text,
+                created_at or datetime.utcnow().isoformat(timespec="seconds"),
+            ),
+        )
+
+
+def get_notes(session_date: str, target_session_type: str) -> List[str]:
+    with _conn() as con:
+        cur = con.execute(
+            """
+            SELECT note_text
+            FROM notes
+            WHERE session_date = ? AND target_session_type = ?
+            ORDER BY id ASC
+            """,
+            (session_date, target_session_type),
+        )
+        rows = cur.fetchall()
+    return [r[0] for r in rows]
+
+def import_note_from_icloud(note: Dict[str, Any]) -> None:
+    add_note(
+        session_date=note["session_date"],
+        target_session_type=note.get("target_session_type", "am"),
+        note_text=note.get("note_text", ""),
+        created_at=note.get("created_at"),
+    )
+
+def get_latest_am_full(session_date: str) -> Optional[Dict[str, Any]]:
+    with _conn() as con:
+        cur = con.execute(
+            """
+            SELECT work_one_thing, family_one_thing, focus_guardrail, if_then_plan, summary, raw_transcript
+            FROM sessions
+            WHERE session_date = ? AND session_type = 'am'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (session_date,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "work_one_thing": row[0],
+        "family_one_thing": row[1],
+        "focus_guardrail": row[2],
+        "if_then_plan": row[3],
+        "summary": row[4],
+        "raw_transcript": row[5],
+    }
+
+def get_latest_am_full(session_date: str) -> Optional[Dict[str, Any]]:
+    with _conn() as con:
+        cur = con.execute(
+            """
+            SELECT work_one_thing, family_one_thing, focus_guardrail, if_then_plan, summary, raw_transcript
+            FROM sessions
+            WHERE session_date = ? AND session_type = 'am'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (session_date,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "work_one_thing": row[0],
+        "family_one_thing": row[1],
+        "focus_guardrail": row[2],
+        "if_then_plan": row[3],
+        "summary": row[4],
+        "raw_transcript": row[5],
+    }
 
