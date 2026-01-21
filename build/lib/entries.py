@@ -94,6 +94,23 @@ def export_entry(payload: Dict[str, Any]) -> Optional[Path]:
 
     return file_path
 
+def iter_entry_files() -> list[Path]:
+    """
+    Returns a sorted list of *.json entry files in the sync dir.
+    """
+    sync_dir = _safe_sync_dir()
+    if sync_dir is None:
+        return []
+    return sorted([p for p in sync_dir.glob("*.json") if p.is_file()])
+
+
+def read_entry_file(path: Path) -> dict[str, Any]:
+    """
+    Reads a single entry JSON file and returns its dict.
+    """
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def wipe_sync_dir_entries() -> int:
     """
     Deletes all files in DAILYJOURNAL_SYNC_DIR.

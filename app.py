@@ -2,7 +2,7 @@
 import os
 import sys
 from datetime import date
-from entries import export_entry, wipe_sync_dir_entries
+from entries import export_entry, wipe_sync_dir_entries, read_entry_file, iter_entry_files
 from store import get_latest_pm_with_tomorrow_focus
 from store import delete_db_file
 
@@ -11,6 +11,9 @@ from store import (
     insert_session,
     get_latest_am,
     get_last_n_summaries,
+    is_file_imported,
+    mark_file_imported,
+    insert_session_from_icloud,
 )
 from prompts import AM_QUESTIONS, PM_QUESTIONS
 from coach import run_am, run_pm
@@ -124,12 +127,41 @@ def show_last():
         first_line = r["summary"].splitlines()[0]
         print(f"{r['date']} [{r['type'].upper()}] {first_line}")
 
+def sync_from_icloud_on_startup() -> None:
+    files = iter_entry_files()
+    if not files:
+        return
+
+    imported = 0
+    skipped = 0
+
+    for path in files:
+        name = path.name
+
+        if is_file_imported(name):
+            skipped += 1
+            continue
+
+        try:
+            entry = read_entry_file(path)
+            insert_session_from_icloud(entry)
+            mark_file_imported(name)
+            imported += 1
+        except Exception as e:
+            # Don't crash the whole app because one file is bad
+            print(f"(sync) WARNING: failed to import {name}: {e}")
+
+    if imported:
+        print(f"(sync) Imported {imported} new iCloud entr{'y' if imported == 1 else 'ies'}.")
+
+
 def main():
     if not os.getenv("OPENAI_API_KEY"):
         print("ERROR: OPENAI_API_KEY is not set in the environment.")
         sys.exit(1)
 
     init_db()
+    sync_from_icloud_on_startup()
 
     if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
         print("""

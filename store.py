@@ -41,15 +41,24 @@ def init_db() -> None:
             improvement TEXT,
             tomorrow_focus TEXT,
 
-            forree_text TEXT,
+            free_text TEXT,
             created_at TEXT NOT NULL
         )
         """
         )
+
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_sessions_date_type ON sessions(session_date, session_type)"
         )
 
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS imported_files (
+                file_name TEXT PRIMARY KEY,
+                imported_at TEXT NOT NULL
+            )
+            """
+        )
 
 def insert_session(payload: Dict[str, Any]) -> None:
     """Insert a session row."""
@@ -112,7 +121,18 @@ def get_latest_am(session_date: str) -> Optional[Dict[str, Any]]:
 
 def get_last_n_summaries(n: int = 10) -> List[Dict[str, str]]:
     with _conn() as con:
-        cur = con.execut
+        cur = con.execute(
+            """
+            SELECT session_date, session_type, summary
+            FROM sessions
+            ORDER BY session_date DESC, id DESC
+            LIMIT ?
+            """,
+            (n,),
+        )
+        rows = cur.fetchall()
+
+    return [{"date": r[0], "type": r[1], "summary": r[2]} for r in rows]
 
 def get_latest_pm_with_tomorrow_focus() -> Optional[Dict[str, Any]]:
     with _conn() as con:
@@ -139,4 +159,57 @@ def delete_db_file() -> bool:
         p.unlink()
         return True
     return False
+
+def is_file_imported(file_name: str) -> bool:
+    with _conn() as con:
+        cur = con.execute(
+            "SELECT 1 FROM imported_files WHERE file_name = ? LIMIT 1",
+            (file_name,),
+        )
+        return cur.fetchone() is not None
+
+
+def mark_file_imported(file_name: str) -> None:
+    with _conn() as con:
+        con.execute(
+            "INSERT OR IGNORE INTO imported_files (file_name, imported_at) VALUES (?, ?)",
+            (file_name, datetime.utcnow().isoformat(timespec="seconds")),
+        )
+
+def insert_session_from_icloud(entry: Dict[str, Any]) -> None:
+    """
+    Inserts an entry dict that came from an iCloud JSON file.
+    We keep it simple: insert what we have, defaulting missing fields to None.
+    """
+    with _conn() as con:
+        con.execute(
+            """
+            INSERT INTO sessions (
+                session_date, session_type, raw_transcript, summary,
+                work_one_thing, family_one_thing, focus_guardrail, if_then_plan,
+                work_done, family_done, focus_done,
+                distraction_cause, improvement, tomorrow_focus,
+                free_text,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry.get("session_date"),
+                entry.get("session_type"),
+                entry.get("raw_transcript") or "",
+                entry.get("summary") or "",
+                entry.get("work_one_thing"),
+                entry.get("family_one_thing"),
+                entry.get("focus_guardrail"),
+                entry.get("if_then_plan"),
+                entry.get("work_done"),
+                entry.get("family_done"),
+                entry.get("focus_done"),
+                entry.get("distraction_cause"),
+                entry.get("improvement"),
+                entry.get("tomorrow_focus"),
+                entry.get("free_text"),
+                entry.get("created_at") or datetime.utcnow().isoformat(timespec="seconds"),
+            ),
+        )
 
