@@ -1,6 +1,7 @@
 README.md
 app.py
 coach.py
+entries.py
 prompts.py
 pyproject.toml
 store.py

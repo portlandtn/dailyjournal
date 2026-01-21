@@ -1,4 +1,5 @@
 app
 coach
+entries
 prompts
 store
