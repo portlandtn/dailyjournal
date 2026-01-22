@@ -1,13 +1,14 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+dist/
+build/
 
-# Virtual environment
+# Virtual environments
 .venv/
+venv/
 
-# SQLite DB
-coachscribe.db
-
-# macOS
+# OS junk
 .DS_Store
 
