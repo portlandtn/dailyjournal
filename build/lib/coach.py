@@ -81,13 +81,6 @@ def run_pm(model: str, am_commitments: Dict[str, Any], answers: List[str]) -> Di
     Evening session:
     Evaluates AM commitments and produces outcomes + tomorrow setup.
     """
-    notes = am_commitments.get("append_notes") or []
-    if notes:
-        transcript.append("Append Notes from today:")
-        for n in notes:
-            transcript.append(f"- {n}")
-        transcript.append("")
-
     transcript = [
         "AM Commitments:",
         f"- Work One Thing: {am_commitments.get('work_one_thing')}",
@@ -96,6 +89,13 @@ def run_pm(model: str, am_commitments: Dict[str, Any], answers: List[str]) -> Di
         f"- If-Then Plan: {am_commitments.get('if_then_plan')}",
         "",
     ]
+
+    notes = am_commitments.get("append_notes") or []
+    if notes:
+        transcript.append("Append Notes from today:")
+        for n in notes:
+            transcript.append(f"- {n}")
+        transcript.append("")
 
     for i, a in enumerate(answers, start=1):
         transcript.append(f"PM Q{i}: {a}")
