@@ -12,3 +12,7 @@ venv/
 # OS junk
 .DS_Store
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
