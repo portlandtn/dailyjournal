@@ -58,14 +58,12 @@ def run_am(model: str, answers: List[str]) -> Dict[str, Any]:
         "required_fields": [
             "work_one_thing",
             "family_one_thing",
-            "focus_guardrail",
             "if_then_plan",
             "summary",
         ],
         "summary_format": [
             "Work One Thing:",
             "Family One Thing:",
-            "Focus Guardrail:",
             "Stress Trigger:",
             "If-Then Plan:",
         ],
@@ -85,10 +83,15 @@ def run_pm(model: str, am_commitments: Dict[str, Any], answers: List[str]) -> Di
         "AM Commitments:",
         f"- Work One Thing: {am_commitments.get('work_one_thing')}",
         f"- Family One Thing: {am_commitments.get('family_one_thing')}",
-        f"- Focus Guardrail: {am_commitments.get('focus_guardrail')}",
         f"- If-Then Plan: {am_commitments.get('if_then_plan')}",
         "",
     ]
+
+    am_notes = am_commitments.get("free_text")
+    if am_notes:
+        transcript.append("AM Additional Notes:")
+        transcript.append(am_notes)
+        transcript.append("")
 
     notes = am_commitments.get("append_notes") or []
     if notes:
@@ -113,7 +116,6 @@ def run_pm(model: str, am_commitments: Dict[str, Any], answers: List[str]) -> Di
         "required_fields": [
             "work_done",
             "family_done",
-            "focus_done",
             "distraction_cause",
             "improvement",
             "summary",
@@ -122,7 +124,6 @@ def run_pm(model: str, am_commitments: Dict[str, Any], answers: List[str]) -> Di
         "summary_format": [
             "Work Result:",
             "Family Result:",
-            "Focus Result:",
             "Distraction Cause:",
             "Improvement:",
             "Tomorrow Focus:",

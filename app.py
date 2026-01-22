@@ -43,6 +43,18 @@ def ask_questions(questions):
         answers.append(ans)
     return answers
 
+def ask_multiline(prompt: str) -> str:
+    print()
+    print(prompt)
+    print("End with a single line containing only: .done")
+    lines = []
+    while True:
+        line = input()
+        if line.strip() == ".done":
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
+
 
 def am_session():
     last_pm = get_latest_pm_with_tomorrow_focus()
@@ -53,6 +65,8 @@ def am_session():
     today = date.today().isoformat() 
     answers = ask_questions(AM_QUESTIONS)
 
+    additional = ask_multiline("Any additional notes for this morning? (optional)")
+
     data = run_am(DEFAULT_MODEL, answers)
 
     payload = {
@@ -62,8 +76,8 @@ def am_session():
         "summary": data["summary"],
         "work_one_thing": data.get("work_one_thing"),
         "family_one_thing": data.get("family_one_thing"),
-        "focus_guardrail": data.get("focus_guardrail"),
         "if_then_plan": data.get("if_then_plan"),
+        "free_text": additional or None,
     }
 
     insert_session(payload)
@@ -77,19 +91,22 @@ def am_session():
 
 def pm_session():
     today = date.today().isoformat()
-    am = get_latest_am(today)
 
+    am_full = get_latest_am_full(today)
+    am = am_full  # reuse for existing logic
+
+    if am_full and am_full.get("free_text"):
+        print("\nAM NOTES YOU ADDED:")
+        print(am_full["free_text"])
     if am:
         print("\nAM COMMITMENTS")
         print(f"- Work One Thing: {am['work_one_thing']}")
         print(f"- Family One Thing: {am['family_one_thing']}")
-        print(f"- Focus Guardrail: {am['focus_guardrail']}")
         print(f"- If-Then Plan: {am['if_then_plan']}")
 
         pm_questions = [
             f"You said your Work One Thing was:\n  \"{am['work_one_thing']}\"\nDid you complete it? What’s the proof?",
             f"You said your Family One Thing was:\n  \"{am['family_one_thing']}\"\nDid you do it? What did you do, specifically?",
-            f"You said your Focus Guardrail was:\n  \"{am['focus_guardrail']}\"\nDid you follow it? If not, what broke it?",
             "What was the biggest trigger for distraction today (one sentence)?",
             "What’s one adjustment you’ll make tomorrow (one sentence)?",
         ]
@@ -99,12 +116,12 @@ def pm_session():
         pm_questions = [
             "What was the ONE thing you most wanted to accomplish today?",
             "Did you accomplish it? What’s the proof or current status?",
-            "What was your biggest distraction today (phone, stress, meetings, fatigue)?",
             "What’s one adjustment you’ll make tomorrow (one sentence)?",
             "What should tomorrow’s focus be (one sentence)?",
         ]
 
     answers = ask_questions(pm_questions)
+    additional = ask_multiline("Any additional notes for tonight? (optional)")
 
     append_notes = get_notes(today, "am")
     am_for_llm = dict(am or {})
@@ -120,10 +137,10 @@ def pm_session():
         "summary": data["summary"],
         "work_done": int(data.get("work_done", 0)),
         "family_done": int(data.get("family_done", 0)),
-        "focus_done": int(data.get("focus_done", 0)),
         "distraction_cause": data.get("distraction_cause"),
         "improvement": data.get("improvement"),
         "tomorrow_focus": data.get("tomorrow_focus"),
+        "free_text": additional or None,
     }
 
     insert_session(payload)
@@ -192,8 +209,6 @@ def append_note(note_text_arg: str | None = None) -> None:
             print(f"- {am_full['family_one_thing']}")
         if am_full.get("work_one_thing"):
             print(f"- {am_full['work_one_thing']}")
-        if am_full.get("focus_guardrail"):
-            print(f"- {am_full['focus_guardrail']}")
         if am_full.get("if_then_plan"):
             print(f"- {am_full['if_then_plan']}")
 

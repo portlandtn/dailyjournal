@@ -40,13 +40,11 @@ class Entry:
     # AM commitments (optional)
     work_one_thing: Optional[str] = None
     family_one_thing: Optional[str] = None
-    focus_guardrail: Optional[str] = None
     if_then_plan: Optional[str] = None
 
     # PM outcomes (optional)
     work_done: Optional[int] = None
     family_done: Optional[int] = None
-    focus_done: Optional[int] = None
     distraction_cause: Optional[str] = None
     improvement: Optional[str] = None
     tomorrow_focus: Optional[str] = None
@@ -73,12 +71,10 @@ def export_entry(payload: Dict[str, Any]) -> Optional[Path]:
 
         work_one_thing=payload.get("work_one_thing"),
         family_one_thing=payload.get("family_one_thing"),
-        focus_guardrail=payload.get("focus_guardrail"),
         if_then_plan=payload.get("if_then_plan"),
 
         work_done=payload.get("work_done"),
         family_done=payload.get("family_done"),
-        focus_done=payload.get("focus_done"),
         distraction_cause=payload.get("distraction_cause"),
         improvement=payload.get("improvement"),
         tomorrow_focus=payload.get("tomorrow_focus"),
@@ -95,21 +91,13 @@ def export_entry(payload: Dict[str, Any]) -> Optional[Path]:
     return file_path
 
 def iter_entry_files() -> list[Path]:
-    """
-    Returns a sorted list of *.json entry files in the sync dir.
-    """
     sync_dir = _safe_sync_dir()
     if sync_dir is None:
         return []
     return sorted([p for p in sync_dir.glob("*.json") if p.is_file()])
 
-
 def read_entry_file(path: Path) -> dict[str, Any]:
-    """
-    Reads a single entry JSON file and returns its dict.
-    """
     return json.loads(path.read_text(encoding="utf-8"))
-
 
 def wipe_sync_dir_entries() -> int:
     """
@@ -127,19 +115,6 @@ def wipe_sync_dir_entries() -> int:
             deleted += 1
 
     return deleted
-
-def iter_entry_files() -> list[Path]:
-    """
-    Returns all *.json files in the sync dir (entries + notes), sorted.
-    """
-    sync_dir = _safe_sync_dir()
-    if sync_dir is None:
-        return []
-    return sorted([p for p in sync_dir.glob("*.json") if p.is_file()])
-
-
-def read_entry_file(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
 
 def export_note(session_date: str, target_session_type: str, note_text: str) -> Optional[Path]:
     """

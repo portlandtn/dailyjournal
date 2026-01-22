@@ -30,13 +30,11 @@ def init_db() -> None:
             -- AM commitments
             work_one_thing TEXT,
             family_one_thing TEXT,
-            focus_guardrail TEXT,
             if_then_plan TEXT,
 
             -- PM outcomes
             work_done INTEGER,                   -- 0/1
             family_done INTEGER,                 -- 0/1
-            focus_done INTEGER,                  -- 0/1
             distraction_cause TEXT,
             improvement TEXT,
             tomorrow_focus TEXT,
@@ -83,10 +81,10 @@ def insert_session(payload: Dict[str, Any]) -> None:
             """
         INSERT INTO sessions (
             session_date, session_type, raw_transcript, summary,
-            work_one_thing, family_one_thing, focus_guardrail, if_then_plan,
-            work_done, family_done, focus_done,
-            distraction_cause, improvement, tomorrow_focus, free_text, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            work_one_thing, family_one_thing, if_then_plan,
+            work_done, family_done, distraction_cause,
+            improvement, tomorrow_focus, free_text, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 payload["session_date"],
@@ -95,11 +93,9 @@ def insert_session(payload: Dict[str, Any]) -> None:
                 payload["summary"],
                 payload.get("work_one_thing"),
                 payload.get("family_one_thing"),
-                payload.get("focus_guardrail"),
                 payload.get("if_then_plan"),
                 payload.get("work_done"),
                 payload.get("family_done"),
-                payload.get("focus_done"),
                 payload.get("distraction_cause"),
                 payload.get("improvement"),
                 payload.get("tomorrow_focus"),
@@ -113,7 +109,7 @@ def get_latest_am(session_date: str) -> Optional[Dict[str, Any]]:
     with _conn() as con:
         cur = con.execute(
             """
-            SELECT work_one_thing, family_one_thing, focus_guardrail, if_then_plan, summary
+            SELECT work_one_thing, family_one_thing, if_then_plan, summary 
             FROM sessions
             WHERE session_date = ? AND session_type = 'am'
             ORDER BY id DESC
@@ -129,9 +125,8 @@ def get_latest_am(session_date: str) -> Optional[Dict[str, Any]]:
     return {
         "work_one_thing": row[0],
         "family_one_thing": row[1],
-        "focus_guardrail": row[2],
-        "if_then_plan": row[3],
-        "summary": row[4],
+        "if_then_plan": row[2],
+        "summary": row[3],
     }
 
 
@@ -193,21 +188,17 @@ def mark_file_imported(file_name: str) -> None:
         )
 
 def insert_session_from_icloud(entry: Dict[str, Any]) -> None:
-    """
-    Inserts an entry dict that came from an iCloud JSON file.
-    We keep it simple: insert what we have, defaulting missing fields to None.
-    """
     with _conn() as con:
         con.execute(
             """
             INSERT INTO sessions (
                 session_date, session_type, raw_transcript, summary,
-                work_one_thing, family_one_thing, focus_guardrail, if_then_plan,
-                work_done, family_done, focus_done,
+                work_one_thing, family_one_thing, if_then_plan,
+                work_done, family_done,
                 distraction_cause, improvement, tomorrow_focus,
                 free_text,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry.get("session_date"),
@@ -216,11 +207,9 @@ def insert_session_from_icloud(entry: Dict[str, Any]) -> None:
                 entry.get("summary") or "",
                 entry.get("work_one_thing"),
                 entry.get("family_one_thing"),
-                entry.get("focus_guardrail"),
                 entry.get("if_then_plan"),
                 entry.get("work_done"),
                 entry.get("family_done"),
-                entry.get("focus_done"),
                 entry.get("distraction_cause"),
                 entry.get("improvement"),
                 entry.get("tomorrow_focus"),
@@ -267,11 +256,12 @@ def import_note_from_icloud(note: Dict[str, Any]) -> None:
         created_at=note.get("created_at"),
     )
 
+
 def get_latest_am_full(session_date: str) -> Optional[Dict[str, Any]]:
     with _conn() as con:
         cur = con.execute(
             """
-            SELECT work_one_thing, family_one_thing, focus_guardrail, if_then_plan, summary, raw_transcript
+            SELECT work_one_thing, family_one_thing, if_then_plan, summary, raw_transcript, free_text
             FROM sessions
             WHERE session_date = ? AND session_type = 'am'
             ORDER BY id DESC
@@ -287,35 +277,9 @@ def get_latest_am_full(session_date: str) -> Optional[Dict[str, Any]]:
     return {
         "work_one_thing": row[0],
         "family_one_thing": row[1],
-        "focus_guardrail": row[2],
-        "if_then_plan": row[3],
-        "summary": row[4],
-        "raw_transcript": row[5],
-    }
-
-def get_latest_am_full(session_date: str) -> Optional[Dict[str, Any]]:
-    with _conn() as con:
-        cur = con.execute(
-            """
-            SELECT work_one_thing, family_one_thing, focus_guardrail, if_then_plan, summary, raw_transcript
-            FROM sessions
-            WHERE session_date = ? AND session_type = 'am'
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (session_date,),
-        )
-        row = cur.fetchone()
-
-    if not row:
-        return None
-
-    return {
-        "work_one_thing": row[0],
-        "family_one_thing": row[1],
-        "focus_guardrail": row[2],
-        "if_then_plan": row[3],
-        "summary": row[4],
-        "raw_transcript": row[5],
+        "if_then_plan": row[2],
+        "summary": row[3],
+        "raw_transcript": row[4],
+        "free_text": row[5],
     }
 
