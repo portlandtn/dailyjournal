@@ -31,6 +31,8 @@ from store import (
 from prompts import AM_QUESTIONS, PM_QUESTIONS
 from coach import run_am, run_pm
 
+APP_VERSION = "0.1.0"
+
 DEFAULT_MODEL = os.getenv("COACHSCRIBE_MODEL", "gpt-4.1-mini")
 
 
@@ -261,6 +263,10 @@ def main():
 
     init_db()
     sync_from_icloud_on_startup()
+
+    if "--version" in sys.argv or "-V" in sys.argv:
+        print(APP_VERSION)
+        sys.exit(0)
 
     if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
         print("""
