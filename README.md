@@ -23,7 +23,7 @@ No dashboards. No gamification. No therapy bot. Just structure.
 - Local SQLite storage
 - Append-only JSON exports for safe cross-machine sync
 - Simple, fast CLI interface
-- Uses OpenAI only for **structured guidance** (no rambling, no journaling for you)
+- Uses OpenAI only for **structured guidance** (no rambling)
 
 ---
 
@@ -31,79 +31,97 @@ No dashboards. No gamification. No therapy bot. Just structure.
 
 - Python **3.10+**
 - An OpenAI API key
-- macOS, Linux, or Windows
+- macOS, Windows, or Linux
 
 ---
 
 ## Installation (Recommended: pipx)
 
-The easiest way to use `dailyjournal` as a real CLI (no virtual environments):
+`pipx` installs Python CLI tools in isolated environments and makes them globally available
+without requiring virtual environments or polluting system Python.
 
-### 1. Install pipx
+---
 
-macOS (Homebrew):
+### macOS
+
+#### 1. Install pipx
 ```bash
 brew install pipx
 pipx ensurepath
 ```
+Restart your terminal after this step.
 
-Restart your terminal after this.
+#### 2. Install dailyjournal
+```bash
+pipx install jeds-dailyjournal
+```
 
 ---
 
-### 2. Install dailyjournal
+### Windows
 
-From the repo root:
-
-```bash
-pipx install .
+#### 1. Install pipx
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
 ```
+Open a **new PowerShell window** after this step.
 
-Or, if you are actively developing:
-
-```bash
-pipx install -e .
+#### 2. Install dailyjournal
+```powershell
+pipx install jeds-dailyjournal
 ```
-
-This installs the `dailyjournal` command globally for your user.
 
 ---
 
-## Environment Variables
+### Linux
 
-`dailyjournal` relies on environment variables for configuration.
-
-### Required
-
+#### 1. Install pipx
 ```bash
-export OPENAI_API_KEY="your_api_key_here"
+python3 -m pip install --user pipx
+pipx ensurepath
+```
+Restart your terminal or re-source your shell config.
+
+#### 2. Install dailyjournal
+```bash
+pipx install jeds-dailyjournal
 ```
 
-### Recommended paths
+---
 
-Using per-user local DB + iCloud for sync:
+## Initial Setup (Wizard)
+
+After installation, run the setup wizard once:
 
 ```bash
-export DAILYJOURNAL_DB_PATH="$HOME/Library/Application Support/dailyjournal/coachscribe.db"
-export DAILYJOURNAL_SYNC_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/dailyjournal/entries"
+dailyjournal setup
 ```
 
-Add these to `~/.zshrc` or `~/.zprofile`.
+The wizard will:
+- Ask where to store your local SQLite database
+- Ask where to export/backup JSON entry files
+- Ask which OpenAI model to use (default is fine)
+- Prompt for your OpenAI API key
+
+### 🔐 API Key Storage (Secure)
+Your OpenAI API key is stored securely using the operating system's credential store:
+- **macOS:** Keychain
+- **Windows:** Credential Manager
+- **Linux:** Secret Service / keyring backend
+
+The key is **not stored in plaintext** and does **not** require environment variables.
 
 ---
 
 ## Usage
 
 ### Show help
-
 ```bash
 dailyjournal help
 ```
 
----
-
 ### Morning session (AM)
-
 ```bash
 dailyjournal am
 ```
@@ -111,20 +129,17 @@ dailyjournal am
 Prompts you to:
 - Define one concrete **work outcome**
 - Define one small **personal/family win**
-- Identify what is most likely to derail you today
-- Create an **if-then plan** for stress or distraction
-- Add optional **additional notes** (free-text)
+- Identify likely sources of distraction
+- Create an **if–then plan**
+- Add optional free-text notes
 
 ---
 
 ### Append a note during the day
-
 ```bash
 dailyjournal append "Meeting moved to 3pm"
 ```
-
 or interactive mode:
-
 ```bash
 dailyjournal append
 ```
@@ -137,7 +152,6 @@ Append notes are:
 ---
 
 ### Evening session (PM)
-
 ```bash
 dailyjournal pm
 ```
@@ -154,7 +168,6 @@ Your AM notes and append notes are surfaced and fed into the PM analysis.
 ---
 
 ### View recent summaries
-
 ```bash
 dailyjournal last
 ```
@@ -162,7 +175,6 @@ dailyjournal last
 ---
 
 ### Version
-
 ```bash
 dailyjournal --version
 dailyjournal -V
@@ -176,8 +188,8 @@ dailyjournal -V
   ```
   coachscribe.db
   ```
-- The database is **ignored by Git**
-- Entries are also exported as append-only JSON files for optional cross-machine sync
+- The database is ignored by Git
+- Entries are also exported as append-only JSON files for optional backup or sync
 - Nothing is uploaded or shared automatically
 - You control all of your data
 
@@ -194,6 +206,8 @@ dailyjournal/
 ├── prompts.py       # Prompt rails and questions
 ├── store.py         # SQLite persistence
 ├── entries.py       # JSON export / sync helpers
+├── config.py        # Config loading/saving
+├── dj_secrets.py    # Secure credential access
 ├── pyproject.toml
 ├── .gitignore
 └── coachscribe.db   # (local only, ignored)
@@ -213,5 +227,4 @@ Use it daily for a week before changing anything.
 ---
 
 ## License
-
-Private / personal use.  
+Private / personal use.
