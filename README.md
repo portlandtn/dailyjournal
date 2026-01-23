@@ -1,15 +1,15 @@
 # dailyjournal
 
-A local-first, CLI-based AM/PM journaling tool focused on **intentional work, accountability, and follow-through**.
+A **local-first**, CLI-based AM/PM journaling tool focused on **intentional work, accountability, and follow-through**.
 
-This tool is designed to:
-- Set **one clear work priority** and **one family/personal priority** each day
-- Reduce distraction (especially phone usage)
+`dailyjournal` is designed to help you:
+- Set **one clear work priority** and **one personal/family priority** each day
+- Anticipate distraction and stress before they derail you
 - Review execution honestly at night
 - Carry momentum from one day to the next
-- Keep all journal data **local to your machine**
+- Keep your journal data **under your control**
 
-No cloud sync. No dashboards. No therapy bot. Just structure.
+No dashboards. No gamification. No therapy bot. Just structure.
 
 ---
 
@@ -18,9 +18,12 @@ No cloud sync. No dashboards. No therapy bot. Just structure.
 - Morning (AM) intention setting
 - Evening (PM) accountability and review
 - Explicit recall of your own commitments
-- Local SQLite storage (nothing leaves your machine)
-- Simple CLI interface
-- Uses OpenAI only for structured guidance (no free-form rambling)
+- Optional free-text notes (AM & PM)
+- Mid-day append notes (`append`)
+- Local SQLite storage
+- Append-only JSON exports for safe cross-machine sync
+- Simple, fast CLI interface
+- Uses OpenAI only for **structured guidance** (no rambling, no journaling for you)
 
 ---
 
@@ -32,80 +35,60 @@ No cloud sync. No dashboards. No therapy bot. Just structure.
 
 ---
 
-## Installation
+## Installation (Recommended: pipx)
 
-### 1. Clone the repository
+The easiest way to use `dailyjournal` as a real CLI (no virtual environments):
 
+### 1. Install pipx
+
+macOS (Homebrew):
 ```bash
-git clone https://github.com/portlandtn/dailyjournal.git
-cd dailyjournal
+brew install pipx
+pipx ensurepath
 ```
+
+Restart your terminal after this.
 
 ---
 
-### 2. Create and activate a virtual environment
+### 2. Install dailyjournal
 
-#### macOS / Linux
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-#### Windows (PowerShell)
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
----
-
-### 3. Install dependencies
+From the repo root:
 
 ```bash
-pip install -r requirements.txt
+pipx install .
 ```
 
----
-
-### 4. Install the CLI command (editable mode)
+Or, if you are actively developing:
 
 ```bash
-pip install -e .
+pipx install -e .
 ```
 
-This creates the `dailyjournal` command.
+This installs the `dailyjournal` command globally for your user.
 
 ---
 
 ## Environment Variables
 
-The app requires an OpenAI API key, stored as an environment variable.
+`dailyjournal` relies on environment variables for configuration.
 
-### macOS / Linux (zsh)
-
-Add this to `~/.zshrc`:
+### Required
 
 ```bash
 export OPENAI_API_KEY="your_api_key_here"
 ```
 
-Then reload:
+### Recommended paths
+
+Using per-user local DB + iCloud for sync:
 
 ```bash
-source ~/.zshrc
+export DAILYJOURNAL_DB_PATH="$HOME/Library/Application Support/dailyjournal/coachscribe.db"
+export DAILYJOURNAL_SYNC_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/dailyjournal/entries"
 ```
 
----
-
-### Windows (PowerShell)
-
-Set it permanently:
-
-```powershell
-setx OPENAI_API_KEY "your_api_key_here"
-```
-
-Open a **new** terminal after running this.
+Add these to `~/.zshrc` or `~/.zprofile`.
 
 ---
 
@@ -126,10 +109,30 @@ dailyjournal am
 ```
 
 Prompts you to:
-- Define one concrete work outcome
-- Define one small personal/family win
-- Set a focus/phone guardrail
-- Create an if-then plan for stress or distraction
+- Define one concrete **work outcome**
+- Define one small **personal/family win**
+- Identify what is most likely to derail you today
+- Create an **if-then plan** for stress or distraction
+- Add optional **additional notes** (free-text)
+
+---
+
+### Append a note during the day
+
+```bash
+dailyjournal append "Meeting moved to 3pm"
+```
+
+or interactive mode:
+
+```bash
+dailyjournal append
+```
+
+Append notes are:
+- Stored locally
+- Exported as immutable JSON
+- Included automatically in the PM review
 
 ---
 
@@ -140,10 +143,13 @@ dailyjournal pm
 ```
 
 Reviews:
-- Whether you completed what you said you would
-- What derailed you (if anything)
+- Whether you completed what you committed to
+- What actually caused distraction
 - One adjustment for tomorrow
-- Sets a “tomorrow focus” carried into the next morning
+- Sets a **tomorrow focus** carried into the next AM
+- Allows additional free-text notes
+
+Your AM notes and append notes are surfaced and fed into the PM analysis.
 
 ---
 
@@ -155,17 +161,27 @@ dailyjournal last
 
 ---
 
+### Version
+
+```bash
+dailyjournal --version
+dailyjournal -V
+```
+
+---
+
 ## Data & Privacy
 
 - All journal entries are stored locally in a SQLite database:
   ```
   coachscribe.db
   ```
-- This file is **ignored by Git** and never committed
-- Nothing is uploaded or synced automatically
-- You control your data completely
+- The database is **ignored by Git**
+- Entries are also exported as append-only JSON files for optional cross-machine sync
+- Nothing is uploaded or shared automatically
+- You control all of your data
 
-If you delete the database file, all journal history is removed.
+Deleting the database removes local history; JSON exports remain if you keep them.
 
 ---
 
@@ -177,22 +193,25 @@ dailyjournal/
 ├── coach.py         # OpenAI interaction layer
 ├── prompts.py       # Prompt rails and questions
 ├── store.py         # SQLite persistence
-├── requirements.txt
+├── entries.py       # JSON export / sync helpers
 ├── pyproject.toml
 ├── .gitignore
-└── coachscribe.db   # (local only, not committed)
+└── coachscribe.db   # (local only, ignored)
 ```
 
 ---
 
-## Notes
+## Philosophy
 
-- This tool is intentionally minimal.
-- It favors **behavior change over features**.
-- Use it for a few days before modifying prompts or flow.
+- Minimal by design
+- Behavior > features
+- Explicit commitments beat vague intentions
+- Reflection only matters if it affects tomorrow
+
+Use it daily for a week before changing anything.
 
 ---
 
 ## License
 
-Private / personal use (add a license if you plan to distribute).
+Private / personal use.  
