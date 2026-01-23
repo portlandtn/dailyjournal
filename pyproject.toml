@@ -3,11 +3,19 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dailyjournal"
+name = "jeds-dailyjournal"
+authors = [{ name = "Jed May" }]
+license = { text = "Proprietary" }
+keywords = ["journal", "cli", "productivity"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: Other/Proprietary License",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+]
 version = "0.1.0"
 description = "AM/PM journaling CLI with accountability"
 requires-python = ">=3.10"
-
 dependencies = [
   "openai>=1.0.0"
 ]
