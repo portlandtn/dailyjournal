@@ -16,3 +16,6 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
+
+# Config files
+config.toml

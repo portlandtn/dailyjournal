@@ -11,15 +11,16 @@ from uuid import uuid4
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-
 def _safe_sync_dir() -> Optional[Path]:
-    sync_dir = os.getenv("DAILYJOURNAL_SYNC_DIR")
-    if not sync_dir:
-        return None
-    p = Path(sync_dir).expanduser()
+    # Env var override (backwards compatible)
+    export_dir = os.getenv("DAILYJOURNAL_SYNC_DIR") or os.getenv("DAILYJOURNAL_EXPORT_DIR")
+    if not export_dir:
+        from config import load_config
+        export_dir = load_config().export_dir
+
+    p = Path(export_dir).expanduser()
     p.mkdir(parents=True, exist_ok=True)
     return p
-
 
 def _make_filename(session_date: str, session_type: str, entry_id: str) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

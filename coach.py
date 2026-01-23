@@ -4,15 +4,20 @@ from typing import Dict, Any, List
 from openai import OpenAI
 
 from prompts import SYSTEM_RULES
+from dj_secrets import get_openai_api_key
 
-client = OpenAI()
-
+def _client() -> OpenAI:
+    api_key = get_openai_api_key()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set. Run 'dailyjournal setup'.")
+    return OpenAI(api_key=api_key)
 
 def _ask_llm(model: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Sends a structured request to the OpenAI Responses API and
     expects a JSON object back.
     """
+    client = _client()
     response = client.responses.create(
         model=model,
         input=[

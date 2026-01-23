@@ -2,6 +2,12 @@
 import os
 import sys
 from datetime import date
+
+from prompts import AM_QUESTIONS, PM_QUESTIONS
+from coach import run_am, run_pm
+from config import AppConfig, load_config, save_config, config_path
+from dj_secrets import set_openai_api_key, get_openai_api_key
+
 from entries import (
     export_entry, 
     wipe_sync_dir_entries,
@@ -28,13 +34,8 @@ from store import (
     add_note,
 )
 
-from prompts import AM_QUESTIONS, PM_QUESTIONS
-from coach import run_am, run_pm
-
-APP_VERSION = "0.1.0"
-
-DEFAULT_MODEL = os.getenv("COACHSCRIBE_MODEL", "gpt-4.1-mini")
-
+APP_VERSION = "0.1.2"
+DEFAULT_MODEL = load_config().model
 
 def ask_questions(questions):
     answers = []
@@ -153,6 +154,51 @@ def pm_session():
     print("\n--- PM SUMMARY ---")
     print(data["summary"])
 
+def setup_wizard():
+    print("dailyjournal setup\n")
+
+    cfg = load_config()
+
+    print(f"Config file: {config_path()}\n")
+
+    # Export/backup dir
+    print(f"Export/backup folder [{cfg.export_dir}]:")
+    export_dir = input("> ").strip() or cfg.export_dir
+
+    # DB path
+    print(f"Local DB path [{cfg.db_path}]:")
+    db_path = input("> ").strip() or cfg.db_path
+
+    # Model
+    print(f"OpenAI model [{cfg.model}]:")
+    model = input("> ").strip() or cfg.model
+
+    # API key in keychain
+    existing = get_openai_api_key()
+    if existing:
+        print("\nOpenAI API key: already set (env var or keychain).")
+        print("Press Enter to keep it, or paste a new key to replace it:")
+    else:
+        print("\nPaste your OpenAI API key (stored in OS Keychain):")
+
+    api_key = input("> ").strip()
+    if api_key:
+        set_openai_api_key(api_key)
+        print("Saved API key to OS Keychain.")
+    else:
+        print("Keeping existing API key (if any).")
+
+    new_cfg = AppConfig(db_path=db_path, export_dir=export_dir, model=model)
+    path = save_config(new_cfg)
+    print(f"\nSaved config to: {path}")
+
+    # Quick sanity checks
+    from pathlib import Path
+    Path(export_dir).expanduser().mkdir(parents=True, exist_ok=True)
+    Path(db_path).expanduser().parent.mkdir(parents=True, exist_ok=True)
+
+    print("\nSetup complete. Try:")
+    print("  dailyjournal am")
 
 def show_last():
     rows = get_last_n_summaries(10)
@@ -257,22 +303,19 @@ def append_note(note_text_arg: str | None = None) -> None:
     print("\n--- NOTE APPENDED ---")
 
 def main():
-    if not os.getenv("OPENAI_API_KEY"):
-        print("ERROR: OPENAI_API_KEY is not set in the environment.")
-        sys.exit(1)
-
-    init_db()
-    sync_from_icloud_on_startup()
-
     if "--version" in sys.argv or "-V" in sys.argv:
         print(APP_VERSION)
         sys.exit(0)
+
+    init_db()
+    sync_from_icloud_on_startup()
 
     if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
         print("""
 dailyjournal — AM/PM journaling with accountability
 
 Usage:
+  dailyjournal setup            First time setup - will set configuration files (OpenAI Key, backup paths, etc.)
   dailyjournal am               Run morning session
   dailyjournal pm               Run evening session
   dailyjournal last             Show recent summaries
@@ -306,6 +349,8 @@ Examples:
         # One-liner mode: dailyjournal append "text..."
         note_text_arg = " ".join(sys.argv[2:]).strip() if len(sys.argv) > 2 else None
         append_note(note_text_arg)
+    elif cmd == "setup":
+        setup_wizard()
     else: 
         print("Unknown command. Run `dailyjournal help`.")
         sys.exit(2)

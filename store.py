@@ -5,13 +5,20 @@ from typing import Optional, Dict, Any, List
 import os
 from pathlib import Path
 
-DB_FILE = os.getenv(
-    "DAILYJOURNAL_DB_PATH",
-    str(Path.home() / ".local" / "share" / "dailyjournal" / "coachscribe.db"),
-)
+def _db_file_path() -> Path:
+    # Env var override wins (backwards compatible)
+    env = os.getenv("DAILYJOURNAL_DB_PATH")
+    if env:
+        return Path(env).expanduser()
+
+    # Config fallback
+    from config import load_config
+    cfg = load_config()
+    return Path(cfg.db_path).expanduser()
+
 
 def _conn() -> sqlite3.Connection:
-    db_path = Path(DB_FILE)
+    db_path = _db_file_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return sqlite3.connect(db_path)
 
@@ -165,7 +172,7 @@ def get_latest_pm_with_tomorrow_focus() -> Optional[Dict[str, Any]]:
 
 def delete_db_file() -> bool:
     from pathlib import Path
-    p = Path(DB_FILE).expanduser()
+    p = _db_file_path() 
     if p.exists():
         p.unlink()
         return True
