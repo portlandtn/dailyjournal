@@ -24,7 +24,7 @@ from store import (
     get_last_n_summaries,
     get_latest_pm_with_tomorrow_focus,
     delete_db_file,
-    # sync tracking for iCloud imports
+    # sync tracking for cloud imports
     is_file_imported,
     mark_file_imported,
     insert_session_from_icloud,
@@ -34,7 +34,7 @@ from store import (
     add_note,
 )
 
-APP_VERSION = "0.1.2"
+APP_VERSION = "0.1.3"
 DEFAULT_MODEL = load_config().model
 
 def ask_questions(questions):
@@ -86,7 +86,7 @@ def am_session():
     insert_session(payload)
     exported = export_entry(payload)
     if exported:
-        print(f"\n(iCloud) wrote entry file: {exported.name}")
+        print(f"\n(cloud) wrote entry file: {exported.name}")
 
     print("\n--- AM SUMMARY ---")
     print(data["summary"])
@@ -149,7 +149,7 @@ def pm_session():
     insert_session(payload)
     exported = export_entry(payload)
     if exported:
-        print(f"\n(iCloud) wrote entry file {exported.name}")
+        print(f"\n(cloud) wrote entry file {exported.name}")
 
     print("\n--- PM SUMMARY ---")
     print(data["summary"])
@@ -237,7 +237,7 @@ def sync_from_icloud_on_startup() -> None:
             print(f"(sync) WARNING: failed to import {name}: {e}")
 
     if imported:
-        print(f"(sync) Imported {imported} new iCloud entr{'y' if imported == 1 else 'ies'}.")
+        print(f"(sync) Imported {imported} new cloud entr{'y' if imported == 1 else 'ies'}.")
 
 def _extract_am_derail_risk(raw_transcript: str) -> str | None:
     # raw_transcript lines look like: "AM Q3: <text>"
@@ -298,7 +298,7 @@ def append_note(note_text_arg: str | None = None) -> None:
 
     exported = export_note(today, "am", note_text)
     if exported:
-        print(f"\n(iCloud) wrote note file: {exported.name}")
+        print(f"\n(cloud) wrote note file: {exported.name}")
 
     print("\n--- NOTE APPENDED ---")
 
@@ -379,7 +379,7 @@ def free_entry():
 
     exported = export_entry(payload)
     if exported:
-        print(f"\n(iCloud) wrote entry file: {exported.name}")
+        print(f"\n(cloud) wrote entry file: {exported.name}")
 
     print("\n--- FREE ENTRY SAVED ---")
 
@@ -390,10 +390,10 @@ def wipe(also_wipe_icloud: bool = False):
     if also_wipe_icloud:
         print("THIS WILL DELETE:")
         print("- Your LOCAL journal database")
-        print("- ALL iCloud entry files in DAILYJOURNAL_SYNC_DIR")
+        print("- ALL cloud entry files in DAILYJOURNAL_SYNC_DIR")
     else:
         print("THIS WILL DELETE YOUR LOCAL JOURNAL DATABASE ONLY.")
-        print("(Tip: add --icloud to also wipe iCloud entry files.)")
+        print("(Tip: add --icloud to also wipe cloud entry files.)")
 
     print("\nTo confirm, type exactly:", phrase)
     typed = input("> ").strip()
@@ -409,7 +409,7 @@ def wipe(also_wipe_icloud: bool = False):
 
     if also_wipe_icloud:
         deleted = wipe_sync_dir_entries()
-        print(f"iCloud sync dir wiped ({deleted} file(s) deleted).")
+        print(f"cloud sync dir wiped ({deleted} file(s) deleted).")
 
 if __name__ == "__main__":
     main()
