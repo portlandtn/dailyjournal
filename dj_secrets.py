@@ -4,8 +4,6 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-import keyring
-
 SERVICE_NAME = "dailyjournal"
 KEY_NAME = "openai_api_key"
 
@@ -17,6 +15,8 @@ def get_openai_api_key() -> Optional[str]:
         return env.strip()
 
     try:
+        import keyring
+
         val = keyring.get_password(SERVICE_NAME, KEY_NAME)
         return val.strip() if val else None
     except Exception:
@@ -24,11 +24,15 @@ def get_openai_api_key() -> Optional[str]:
 
 
 def set_openai_api_key(value: str) -> None:
+    import keyring
+
     keyring.set_password(SERVICE_NAME, KEY_NAME, value.strip())
 
 
 def delete_openai_api_key() -> None:
     try:
+        import keyring
+
         keyring.delete_password(SERVICE_NAME, KEY_NAME)
     except Exception:
         pass

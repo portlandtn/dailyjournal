@@ -1,8 +1,8 @@
-# dailyjournal
+# Daily Journal
 
-A **local-first**, CLI-based AM/PM journaling tool focused on **intentional work, accountability, and follow-through**.
+A **local-first** morning and evening journal you run from the terminal, focused on **intentional work, accountability, and follow-through**.
 
-`dailyjournal` is designed to help you:
+The command is `dailyjournal`. It is designed to help you:
 - Set **one clear work priority** and **one personal/family priority** each day
 - Anticipate distraction and stress before they derail you
 - Review execution honestly at night
@@ -10,6 +10,23 @@ A **local-first**, CLI-based AM/PM journaling tool focused on **intentional work
 - Keep your journal data **under your control**
 
 No dashboards. No gamification. No therapy bot. Just structure.
+
+---
+
+## Download
+
+You do not need Python. Each download is a single program with everything inside it.
+
+Get the latest from the [releases page](https://github.com/portlandtn/dailyjournal/releases/latest). There are two editions:
+
+| Edition | What it does | Internet |
+|---|---|---|
+| **No AI** (`dailyjournal-noai-...`) | Asks the questions, saves your answers, and writes the summary from exactly what you typed. | Never connects. |
+| **OpenAI** (`dailyjournal-openai-...`) | Same journal. If you add your own OpenAI API key, your answers are sent to OpenAI, which tightens them into commitments and judges the evening review. | Only when a key is set. |
+
+The OpenAI edition without a key behaves like the no-AI edition, and it falls back to it if a request fails, so nothing you type is lost.
+
+Unzip the download, open a terminal in the folder, and run `dailyjournal setup` (`./dailyjournal setup` on Mac and Linux). The `README.txt` in the download covers the security prompts on Windows and Mac.
 
 ---
 
@@ -23,19 +40,13 @@ No dashboards. No gamification. No therapy bot. Just structure.
 - Local SQLite storage
 - Append-only JSON exports for safe cross-machine sync
 - Simple, fast CLI interface
-- Uses OpenAI only for **structured guidance** (no rambling)
+- Works with no AI at all; OpenAI is optional and used only for **structured guidance** (no rambling)
 
 ---
 
-## Requirements
+## Install with pipx (for Python users)
 
-- Python **3.10+**
-- An OpenAI API key
-- macOS, Windows, or Linux
-
----
-
-## Installation (Recommended: pipx)
+Requirements: Python **3.10+** on macOS, Windows, or Linux. An OpenAI API key is optional.
 
 `pipx` installs Python CLI tools in isolated environments and makes them globally available
 without requiring virtual environments or polluting system Python.
@@ -102,7 +113,9 @@ The wizard will:
 - Ask where to store your local SQLite database
 - Ask where to export/backup JSON entry files
 - Ask which OpenAI model to use (default is fine)
-- Prompt for your OpenAI API key
+- Prompt for your OpenAI API key (press Enter to skip and journal without AI)
+
+The no-AI download skips the last two questions.
 
 ### 🔐 API Key Storage (Secure)
 Your OpenAI API key is stored securely using the operating system's credential store:
@@ -190,7 +203,9 @@ dailyjournal -V
   ```
 - The database is ignored by Git
 - Entries are also exported as append-only JSON files for optional backup or sync
-- Nothing is uploaded or shared automatically
+- Without an OpenAI key, nothing leaves your computer
+- With a key, the answers from each morning and evening session (plus that day's notes) are sent to OpenAI to produce the summary. Free entries and appended notes are not sent on their own.
+- Set `DAILYJOURNAL_NO_AI=1` to switch AI off without removing your key
 - You control all of your data
 
 Deleting the database removes local history; JSON exports remain if you keep them.
@@ -202,12 +217,17 @@ Deleting the database removes local history; JSON exports remain if you keep the
 ```
 dailyjournal/
 ├── app.py           # CLI entry point
-├── coach.py         # OpenAI interaction layer
+├── engine.py        # Picks OpenAI coaching or plain mode
+├── coach.py         # OpenAI interaction layer (left out of the no-AI download)
+├── plain.py         # Sessions without AI
 ├── prompts.py       # Prompt rails and questions
 ├── store.py         # SQLite persistence
 ├── entries.py       # JSON export / sync helpers
 ├── config.py        # Config loading/saving
 ├── dj_secrets.py    # Secure credential access
+├── tests/           # End-to-end session tests (python -m unittest discover tests)
+├── packaging/       # Files that ship inside each download
+├── docs/RELEASING.md
 ├── pyproject.toml
 ├── .gitignore
 └── coachscribe.db   # (local only, ignored)
@@ -227,4 +247,7 @@ Use it daily for a week before changing anything.
 ---
 
 ## License
-Private / personal use.
+
+Source available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). You can read, use, and modify it for personal and other noncommercial purposes. For anything commercial, ask first.
+
+Required Notice: Copyright Jed May (https://jedmay.com)
