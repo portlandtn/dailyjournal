@@ -3,10 +3,10 @@ import os
 import sys
 from datetime import date
 
+import engine
+import plain
 from prompts import AM_QUESTIONS, PM_QUESTIONS
-from coach import run_am, run_pm
 from config import AppConfig, load_config, save_config, config_path
-from dj_secrets import set_openai_api_key, get_openai_api_key
 
 from entries import (
     export_entry, 
@@ -34,7 +34,7 @@ from store import (
     add_note,
 )
 
-APP_VERSION = "0.1.3"
+APP_VERSION = "0.2.0"
 DEFAULT_MODEL = load_config().model
 
 def ask_questions(questions):
@@ -45,6 +45,30 @@ def ask_questions(questions):
         ans = input("> ").strip()
         answers.append(ans)
     return answers
+
+def ask_yes_no(question: str) -> bool:
+    while True:
+        print()
+        print(f"{question} (y/n)")
+        ans = input("> ").strip().lower()
+        if ans in ("y", "yes"):
+            return True
+        if ans in ("n", "no"):
+            return False
+        print("Please answer y or n.")
+
+
+def _coach_or_none(run):
+    """Runs an OpenAI coach call. Returns None if AI is off or the call fails."""
+    if not engine.ai_ready():
+        return None
+    try:
+        return run()
+    except Exception as e:
+        print(f"\n(ai) OpenAI request failed: {e}")
+        print("(ai) Saving this session without AI so nothing you typed is lost.")
+        return None
+
 
 def ask_multiline(prompt: str) -> str:
     print()
@@ -70,7 +94,9 @@ def am_session():
 
     additional = ask_multiline("Any additional notes for this morning? (optional)")
 
-    data = run_am(DEFAULT_MODEL, answers)
+    data = _coach_or_none(lambda: engine.coach.run_am(DEFAULT_MODEL, answers))
+    if data is None:
+        data = plain.run_am(answers)
 
     payload = {
         "session_date": today,
@@ -123,7 +149,22 @@ def pm_session():
             "What should tomorrow’s focus be (one sentence)?",
         ]
 
+    use_ai = engine.ai_ready()
+    if am and not use_ai:
+        # The coach works out tomorrow's focus from your answers. Without it, just ask.
+        pm_questions.append("What should tomorrow’s focus be (one sentence)?")
+
     answers = ask_questions(pm_questions)
+
+    work_done = family_done = False
+    if not use_ai:
+        # The coach judges this from your answers. Without it, you make the call.
+        if am:
+            work_done = ask_yes_no("Count the Work One Thing as done?")
+            family_done = ask_yes_no("Count the Family One Thing as done?")
+        else:
+            work_done = ask_yes_no("Count today's one thing as done?")
+
     additional = ask_multiline("Any additional notes for tonight? (optional)")
 
     append_notes = get_notes(today, "am")
@@ -131,7 +172,19 @@ def pm_session():
     if append_notes:
         am_for_llm["append_notes"] = append_notes
 
-    data = run_pm(DEFAULT_MODEL, am_for_llm, answers)
+    data = None
+    if use_ai:
+        data = _coach_or_none(lambda: engine.coach.run_pm(DEFAULT_MODEL, am_for_llm, answers))
+        if data is None and am:
+            # The coach call failed after the questions were asked, so get the
+            # answers it would have worked out.
+            answers.append(ask_questions(["What should tomorrow’s focus be (one sentence)?"])[0])
+            work_done = ask_yes_no("Count the Work One Thing as done?")
+            family_done = ask_yes_no("Count the Family One Thing as done?")
+        elif data is None:
+            work_done = ask_yes_no("Count today's one thing as done?")
+    if data is None:
+        data = plain.run_pm(am_for_llm, answers, work_done, family_done, had_am=bool(am))
 
     payload = {
         "session_date": today,
@@ -169,24 +222,37 @@ def setup_wizard():
     print(f"Local DB path [{cfg.db_path}]:")
     db_path = input("> ").strip() or cfg.db_path
 
-    # Model
-    print(f"OpenAI model [{cfg.model}]:")
-    model = input("> ").strip() or cfg.model
+    model = cfg.model
+    if engine.AI_BUILD:
+        from dj_secrets import set_openai_api_key
 
-    # API key in keychain
-    existing = get_openai_api_key()
-    if existing:
-        print("\nOpenAI API key: already set (env var or keychain).")
-        print("Press Enter to keep it, or paste a new key to replace it:")
-    else:
-        print("\nPaste your OpenAI API key (stored in OS Keychain):")
+        # Model
+        print(f"OpenAI model [{cfg.model}]:")
+        model = input("> ").strip() or cfg.model
 
-    api_key = input("> ").strip()
-    if api_key:
-        set_openai_api_key(api_key)
-        print("Saved API key to OS Keychain.")
+        # API key in keychain
+        existing = engine.get_api_key()
+        if existing:
+            print("\nOpenAI API key: already set (env var or keychain).")
+            print("Press Enter to keep it, or paste a new key to replace it:")
+        else:
+            print("\nPaste your OpenAI API key (stored in OS Keychain).")
+            print("Or press Enter to skip. Sessions work without a key; they just skip the AI coaching.")
+
+        api_key = input("> ").strip()
+        if api_key:
+            try:
+                set_openai_api_key(api_key)
+                print("Saved API key to OS Keychain.")
+            except Exception as e:
+                print(f"Could not save the key to the OS keychain: {e}")
+                print("Set the OPENAI_API_KEY environment variable instead.")
+        elif existing:
+            print("Keeping existing API key.")
+        else:
+            print("No API key set. Sessions will run without AI until you add one.")
     else:
-        print("Keeping existing API key (if any).")
+        print("\nThis is the no-AI edition. It never asks for an API key and never connects to the internet.")
 
     new_cfg = AppConfig(db_path=db_path, export_dir=export_dir, model=model)
     path = save_config(new_cfg)
@@ -302,20 +368,11 @@ def append_note(note_text_arg: str | None = None) -> None:
 
     print("\n--- NOTE APPENDED ---")
 
-def main():
-    if "--version" in sys.argv or "-V" in sys.argv:
-        print(APP_VERSION)
-        sys.exit(0)
-
-    init_db()
-    sync_from_icloud_on_startup()
-
-    if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
-        print("""
+HELP_TEXT = """
 dailyjournal — AM/PM journaling with accountability
 
 Usage:
-  dailyjournal setup            First time setup - will set configuration files (OpenAI Key, backup paths, etc.)
+  dailyjournal setup            First time setup - where to keep your journal (and your OpenAI key, in the OpenAI edition)
   dailyjournal am               Run morning session
   dailyjournal pm               Run evening session
   dailyjournal last             Show recent summaries
@@ -330,11 +387,71 @@ Examples:
   dailyjournal am
   dailyjournal pm
   dailyjournal append "Got 3178 done; follow up tomorrow"
-""")
+"""
+
+
+def _mode_line() -> str:
+    if not engine.AI_BUILD:
+        return "no-AI edition: everything stays on this computer"
+    if engine.ai_ready():
+        return "OpenAI edition: AI coaching is on"
+    return "OpenAI edition: no API key set, so sessions run without AI (run `dailyjournal setup` to add one)"
+
+
+def interactive_menu() -> None:
+    """Shown when a downloaded build is started without a command, for example by double-clicking it."""
+    print(HELP_TEXT)
+    print(f"dailyjournal {APP_VERSION} ({_mode_line()})")
+    while True:
+        print("\nType a command (setup, am, pm, append, free, last) or press Enter to quit:")
+        try:
+            line = input("> ").strip()
+        except EOFError:
+            return
+        if not line or line.lower() in ("q", "quit", "exit"):
+            return
+        parts = line.split()
+        if parts[0].lower() == "dailyjournal":
+            parts = parts[1:]
+        if not parts:
+            continue
+        if parts[0].lower() == "wipe":
+            print("Run `dailyjournal wipe` from a terminal to erase the journal.")
+            continue
+        try:
+            run_command(parts[0].lower(), parts[1:])
+        except SystemExit:
+            pass
+
+
+def main():
+    # Older Windows consoles cannot print every character; replace instead of crashing.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+    if "--version" in sys.argv or "-V" in sys.argv:
+        print(APP_VERSION)
         sys.exit(0)
 
-    cmd = sys.argv[1].lower()
+    init_db()
+    sync_from_icloud_on_startup()
 
+    if len(sys.argv) < 2 and getattr(sys, "frozen", False) and sys.stdin.isatty():
+        interactive_menu()
+        sys.exit(0)
+
+    if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
+        print(HELP_TEXT)
+        print(f"dailyjournal {APP_VERSION} ({_mode_line()})")
+        sys.exit(0)
+
+    run_command(sys.argv[1].lower(), sys.argv[2:])
+
+
+def run_command(cmd: str, args: list) -> None:
     if cmd == "am":
         am_session()
     elif cmd == "pm":
@@ -344,10 +461,10 @@ Examples:
     elif cmd in ("free_entry", "free", "free_text"):
         free_entry()
     elif cmd == "wipe":
-        wipe(also_wipe_icloud=("--icloud" in sys.argv))
+        wipe(also_wipe_icloud=("--icloud" in args))
     elif cmd == "append":
         # One-liner mode: dailyjournal append "text..."
-        note_text_arg = " ".join(sys.argv[2:]).strip() if len(sys.argv) > 2 else None
+        note_text_arg = " ".join(args).strip() if args else None
         append_note(note_text_arg)
     elif cmd == "setup":
         setup_wizard()

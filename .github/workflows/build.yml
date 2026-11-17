@@ -1,0 +1,162 @@
+name: Build downloads
+
+# Tests the journal, then builds standalone downloads for Windows, macOS, and Linux
+# in two editions: no-AI and OpenAI. Pushing a tag like v0.2.0 publishes a release.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover tests -v
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { os: ubuntu-22.04, name: linux-x64 }
+          - { os: windows-latest, name: windows-x64 }
+          - { os: macos-15, name: macos-arm64 }
+          - { os: macos-15-intel, name: macos-intel }
+        edition: [noai, openai]
+    runs-on: ${{ matrix.target.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      EDITION: ${{ matrix.edition }}
+      TARGET: ${{ matrix.target.name }}
+      # macOS signing is optional. Without these secrets the Mac builds are unsigned.
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+          if [ "$EDITION" = "openai" ]; then python -m pip install openai keyring; fi
+
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS' && env.HAS_SIGNING == 'true'
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN"
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Build
+        run: |
+          ARGS=(--onefile --name dailyjournal)
+          if [ "$EDITION" = "noai" ]; then
+            # Leave the OpenAI client and key storage out entirely.
+            ARGS+=(--exclude-module openai --exclude-module coach --exclude-module keyring --exclude-module dj_secrets)
+          fi
+          if [ "$RUNNER_OS" = "macOS" ] && [ "$HAS_SIGNING" = "true" ]; then
+            ARGS+=(--codesign-identity "$MACOS_SIGN_IDENTITY" --osx-entitlements-file packaging/entitlements.plist)
+          fi
+          pyinstaller "${ARGS[@]}" app.py
+
+      - name: Smoke test
+        run: |
+          BIN=dist/dailyjournal
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN=dist/dailyjournal.exe; fi
+          export HOME="$RUNNER_TEMP/home" APPDATA="$RUNNER_TEMP/home"
+          export DAILYJOURNAL_DB_PATH="$RUNNER_TEMP/home/journal.db" DAILYJOURNAL_SYNC_DIR="$RUNNER_TEMP/home/exports"
+          mkdir -p "$HOME"
+          unset OPENAI_API_KEY
+          test "$("$BIN" --version | tr -d '\r')" = "$(python -c 'import re; print(re.search(r"APP_VERSION = \"(.+?)\"", open("app.py").read()).group(1))')"
+          "$BIN" help | tee help.txt
+          if [ "$EDITION" = "noai" ]; then grep -q "no-AI edition" help.txt; else grep -q "OpenAI edition" help.txt; fi
+          printf 'Ship the report\nWalk at 6\nSlack\nIf Slack then stand up\n.done\n' | "$BIN" am | tee am.txt
+          grep -q "Work One Thing: Ship the report" am.txt
+          "$BIN" last | grep -q "Work One Thing: Ship the report"
+
+      - name: Notarize macOS build
+        if: runner.os == 'macOS' && env.HAS_SIGNING == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --verify --strict --verbose=2 dist/dailyjournal
+          ditto -c -k dist/dailyjournal "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+
+      - name: Package
+        run: |
+          NAME="dailyjournal-$EDITION-$TARGET"
+          mkdir -p "package/$NAME" out
+          cp packaging/README.txt LICENSE.md "package/$NAME/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp dist/dailyjournal.exe "package/$NAME/"
+            (cd package && 7z a -tzip "../out/$NAME.zip" "$NAME" > /dev/null)
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            cp dist/dailyjournal "package/$NAME/"
+            (cd package && ditto -c -k --keepParent "$NAME" "../out/$NAME.zip")
+          else
+            cp dist/dailyjournal "package/$NAME/"
+            tar -C package -czf "out/$NAME.tar.gz" "$NAME"
+          fi
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dailyjournal-${{ matrix.edition }}-${{ matrix.target.name }}
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches the app version
+        run: |
+          VERSION="$(python3 -c 'import re; print(re.search(r"APP_VERSION = \"(.+?)\"", open("app.py").read()).group(1))')"
+          test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match APP_VERSION $VERSION"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd out && sha256sum * > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" out/* --title "Daily Journal $GITHUB_REF_NAME" --generate-notes
